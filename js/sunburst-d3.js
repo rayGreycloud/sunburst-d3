@@ -114,7 +114,7 @@ function sunburst() {
 
   // Animate arc update
   // Return tween function that recalculates arcs incrementally
-  function arcTweenPaths(a, i) {
+  function arcTweenPath(a, i) {
     let oi = d3.interpolate({ x0: a.x0s, x1: a.x1 }, a);
 
     function tween(t) {
@@ -134,7 +134,7 @@ function sunburst() {
 
     function tween(t) {
       let b = oi(t);
-      return `translate(${arc.centroid(d)})rotate( ${computeTextRotation(d)})`;
+      return `translate(${arc.centroid(b)})rotate( ${computeTextRotation(b)})`;
     }
 
     return tween;
