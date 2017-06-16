@@ -27,23 +27,38 @@ function sunburst() {
 
     //  Find root node, begin sizing
     const root = d3.hierarchy(nodeData)
-      .sum(function (d) { return d.size});
+      .sum(function (d) { return d.size})
+      // Sort nodes using value attribute
+      .sort(function (a, b) {
+        return b.value - a.value;
+      });
 
     // Size arcs
     partition(root);
-    let arc = d3.arc()
-      .startAngle(function (d) { return d.x0})
-      .endAngle(function (d) { return d.x1})
+    arc = d3.arc()
+      // Save start state
+      .startAngle(function (d) {
+        d.x0s = d.x0;
+        return d.x0;
+      })
+      .endAngle(function (d) {
+        d.x1s = d.x1;
+        return d.x1;
+      })
       .innerRadius(function (d) { return d.y0})
       .outerRadius(function (d) { return d.y1});
 
-    // Add <g> element for each node
-    g.selectAll('g')
+    // Add <g> element for each node and create slice
+    let slice = g.selectAll('g')
       .data(root.descendants())
       .enter()
-      .append('g').attr('class', 'node')
+      .append('g').attr('class', 'node');
+
       // Add path elements
-      .append('path').attr('display', function (d) { return d.depth ? null : "none"; })
+      slice.append('path')
+      .attr('display', function (d) {
+        return d.depth ? null : "none";
+      })
       // Draw paths
       .attr('d', arc)
       // Color lines
@@ -54,9 +69,7 @@ function sunburst() {
       });
 
     // Add label for each node
-    g.selectAll('.node')
-      // Add empty text element to each node
-      .append('text')
+    slice.append('text')
       // Move ref point for text element to center of arc
       .attr('transform', function (d) {
         return `translate(${arc.centroid(d)})rotate( ${computeTextRotation(d)})`;
@@ -69,15 +82,61 @@ function sunburst() {
       .text(function (d) {
         return d.parent ? d.data.name : ''
       });
-    // Calculate distance to rotate each label
-    function computeTextRotation(d) {
-      const angle = (d.x0 + d.x1) / Math.PI * 90;
-      // Avoid upside down labels
-      // Labels as rims
-      return (angle < 120 || angle > 270) ? angle : angle + 180;
-      // alternate - labels as spokes
-      // return (angle < 180) ? angle - 90 : angle + 90;
-    }
+
+    // Redraw sunburst based on user input
+    d3.selectAll(".sizeSelect").on("click", function (d, i) {
+      // Determine selection
+      if (this.value === 'size') {
+        root.sum(function (d) {
+          return d.size;
+        });
+      } else {
+        // if Count selected, calculate node.value based on count of node's children
+        root.count();
+      }
+      // Update node values for each arc
+      partition(root);
+      // Animate change over duration using tween functions to calculate steps
+      slice.selectAll("path").transition().duration(750).attrTween("d", arcTweenPath);
+      slice.selectAll("text").transition().duration(750).attrTween("transform", arcTweenText);
+    });
   });
 
+  // Calculate distance to rotate each label
+  function computeTextRotation(d) {
+    const angle = (d.x0 + d.x1) / Math.PI * 90;
+    // Avoid upside down labels
+    // Labels as rims
+    return (angle < 120 || angle > 270) ? angle : angle + 180;
+    // alternate - labels as spokes
+    // return (angle < 180) ? angle - 90 : angle + 90;
+  }
+
+  // Animate arc update
+  // Return tween function that recalculates arcs incrementally
+  function arcTweenPaths(a, i) {
+    let oi = d3.interpolate({ x0: a.x0s, x1: a.x1 }, a);
+
+    function tween(t) {
+      let b = oi(t);
+      a.x0s = b.x0;
+      a.x1s = b.x1;
+      return arc(b);
+    }
+
+    return tween;
+  }
+
+  // Animate text location/rotation
+  // Return tween function that recreates text transform attribute repeatedly
+  function arcTweenText(a, i) {
+    let oi = d3.interpolate({ x0: a.x0s, x1: a.x1s }, a);
+
+    function tween(t) {
+      let b = oi(t);
+      return `translate(${arc.centroid(d)})rotate( ${computeTextRotation(d)})`;
+    }
+
+    return tween;
+  }
 }
